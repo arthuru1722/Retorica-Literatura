@@ -11,48 +11,113 @@ const nextBtn = document.getElementById('next-btn');
 const submitBtn = document.getElementById('submit-btn');
 const closeQuiz = document.getElementById('close-quiz');
 
-function getQtdPerguntas(quizId) {
-    if (quizzes[quizId] && quizzes[quizId].perguntas) {
-        return quizzes[quizId].perguntas.length;
-    }
-    return 0;
-}
-
 // Estado da aplicação
 let currentFilter = 'all';
 let currentSearch = '';
 let currentQuiz = null;
 let currentQuestionIndex = 0;
 let userAnswers = {};
+let livros = [];
+let quizzes = {};
 
-// Extrair todas as categorias únicas
-const allCategories = ['all'];
-livros.forEach(livro => {
-    livro.categorias.forEach(categoria => {
-        if (!allCategories.includes(categoria)) {
-            allCategories.push(categoria);
-        }
+function getQtdPerguntas(quizId) {
+    if (!quizzes[quizId] || !quizzes[quizId].perguntas) {
+        return 0;
+    }
+    return quizzes[quizId].perguntas.length;
+}
+
+// Função para carregar dados remotos
+async function loadExternalData() {
+    try {
+        // Exibir estado de carregamento
+        catalogContainer.innerHTML = `
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Carregando catálogo...</span>
+            </div>
+        `;
+
+        // Carregar ambos simultaneamente
+        const [livrosResponse, quizzesResponse] = await Promise.all([
+            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/livros.js'),
+            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/quizzes.js')
+        ]);
+
+        if (!livrosResponse.ok) throw new Error('Falha ao carregar livros');
+        if (!quizzesResponse.ok) throw new Error('Falha ao carregar quizzes');
+
+        const livrosText = await livrosResponse.text();
+        const quizzesText = await quizzesResponse.text();
+
+        // Converter texto em objetos JavaScript
+        livros = (new Function(`${livrosText}; return livros;`))();
+        quizzes = (new Function(`${quizzesText}; return quizzes;`))();
+
+        // Inicializar a aplicação
+        initApp();
+    } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        catalogContainer.innerHTML = `
+            <div class="error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Erro ao carregar dados</h3>
+                <p>${error.message}</p>
+                <button onclick="location.reload()">Tentar novamente</button>
+            </div>
+        `;
+    }
+}
+
+// Inicializar a aplicação após carregar dados
+function initApp() {
+    // Extrair todas as categorias únicas
+    const allCategories = ['all'];
+    livros.forEach(livro => {
+        livro.categorias.forEach(categoria => {
+            if (!allCategories.includes(categoria)) {
+                allCategories.push(categoria);
+            }
+        });
     });
-});
 
-// Gerar botões de filtro
-allCategories.forEach(categoria => {
-    const btn = document.createElement('button');
-    btn.className = 'filter-btn';
-    if (categoria === 'all') btn.classList.add('active');
-    btn.dataset.filter = categoria;
-    btn.textContent = categoria === 'all' ? 'Todos' : categoria;
-    filtersContainer.appendChild(btn);
-});
+    // Gerar botões de filtro
+    filtersContainer.innerHTML = '';
+    allCategories.forEach(categoria => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-btn';
+        if (categoria === 'all') btn.classList.add('active');
+        btn.dataset.filter = categoria;
+        btn.textContent = categoria === 'all' ? 'Todos' : categoria;
+        filtersContainer.appendChild(btn);
+    });
+
+    // Renderizar catálogo
+    renderCatalog();
+}
 
 // Renderizar catálogo
 function renderCatalog() {
     catalogContainer.innerHTML = '';
     
+    if (!livros || livros.length === 0) {
+        catalogContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-book-open"></i>
+                <h3>Nenhum livro carregado</h3>
+                <p>Os dados ainda não foram carregados. Aguarde.</p>
+            </div>
+        `;
+        return;
+    }
+    
     const filteredLivros = livros.filter(livro => {
-        const filterMatch = currentFilter === 'all' || livro.categorias.includes(currentFilter);
+        const filterMatch = currentFilter === 'all' || 
+                            livro.categorias.includes(currentFilter);
+        
         const searchMatch = livro.titulo.toLowerCase().includes(currentSearch.toLowerCase()) || 
-                           livro.autor.toLowerCase().includes(currentSearch.toLowerCase());
+                            livro.autor.toLowerCase().includes(currentSearch.toLowerCase());
+        
         return filterMatch && searchMatch;
     });
     
@@ -69,6 +134,7 @@ function renderCatalog() {
     
     filteredLivros.forEach(livro => {
         const qtdRealPerguntas = getQtdPerguntas(livro.quizUrl);
+        
         const categoriasHTML = livro.categorias.map(categoria => 
             `<span class="book-category">${categoria}</span>`
         ).join('');
@@ -76,6 +142,7 @@ function renderCatalog() {
         const bookCard = document.createElement('div');
         bookCard.className = 'book-card';
         bookCard.dataset.id = livro.id;
+        
         bookCard.innerHTML = `
             <div class="book-cover">
                 <img src="${livro.capa}" alt="${livro.titulo}">
@@ -83,17 +150,32 @@ function renderCatalog() {
             <div class="book-info">
                 <h3 class="book-title">${livro.titulo}</h3>
                 <p class="book-author">${livro.autor}</p>
-                <div class="book-categories">${categoriasHTML}</div>
-                <div class="book-meta">
-                    <div><i class="fas fa-calendar"></i><span>${livro.dataLancamento}</span></div>
-                    <div><i class="fas fa-question-circle"></i><span>${qtdRealPerguntas} perguntas</span></div>
+                <div class="book-categories">
+                    ${categoriasHTML}
                 </div>
                 <div class="book-meta">
-                    <div><i class="fas fa-book"></i><span>${livro.paginas} páginas</span></div>
-                    <div><i class="fas fa-clock"></i><span>${livro.tempoLeitura} horas</span></div>
+                    <div>
+                        <i class="fas fa-calendar"></i>
+                        <span>${livro.dataLancamento}</span>
+                    </div>
+                    <div>
+                        <i class="fas fa-question-circle"></i>
+                        <span>${qtdRealPerguntas} perguntas</span>
+                    </div>
+                </div>
+                <div class="book-meta">
+                    <div>
+                        <i class="fas fa-book"></i>
+                        <span>${livro.paginas} páginas</span>
+                    </div>
+                    <div>
+                        <i class="fas fa-clock"></i>
+                        <span>${livro.tempoLeitura} horas</span>
+                    </div>
                 </div>
             </div>
         `;
+        
         bookCard.addEventListener('click', () => openQuiz(livro.quizUrl));
         catalogContainer.appendChild(bookCard);
     });
@@ -101,6 +183,11 @@ function renderCatalog() {
 
 // Abrir questionário
 function openQuiz(quizId) {
+    if (!quizzes || Object.keys(quizzes).length === 0) {
+        alert('Dados ainda não carregados. Tente novamente em alguns instantes.');
+        return;
+    }
+    
     if (!quizzes[quizId]) {
         alert('Questionário ainda não disponível para este livro.');
         return;
@@ -121,33 +208,46 @@ function openQuiz(quizId) {
 // Renderizar pergunta atual
 function renderQuestion() {
     quizContent.innerHTML = '';
+    
     const question = currentQuiz.perguntas[currentQuestionIndex];
     if (!question) return;
     
     const questionEl = document.createElement('div');
     questionEl.className = 'question';
+    
     questionEl.innerHTML = `
         <h4 class="question-text">${currentQuestionIndex + 1}. ${question.pergunta}</h4>
         <div class="options" id="options-container"></div>
     `;
+    
     quizContent.appendChild(questionEl);
     
     const optionsContainer = document.getElementById('options-container');
     question.opcoes.forEach((opcao, index) => {
         const optionEl = document.createElement('div');
         optionEl.className = 'option';
-        if (userAnswers[question.id] === index) optionEl.classList.add('selected');
+        if (userAnswers[question.id] === index) {
+            optionEl.classList.add('selected');
+        }
         optionEl.textContent = opcao;
         optionEl.dataset.index = index;
+        
         optionEl.addEventListener('click', () => {
-            document.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+            document.querySelectorAll('.option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            
             optionEl.classList.add('selected');
             userAnswers[question.id] = index;
         });
+        
         optionsContainer.appendChild(optionEl);
     });
     
+    // Atualizar progresso
     quizProgress.textContent = `Pergunta ${currentQuestionIndex + 1} de ${currentQuiz.perguntas.length}`;
+    
+    // Atualizar botões
     prevBtn.style.display = currentQuestionIndex > 0 ? 'block' : 'none';
     nextBtn.style.display = currentQuestionIndex < currentQuiz.perguntas.length - 1 ? 'block' : 'none';
     submitBtn.style.display = currentQuestionIndex === currentQuiz.perguntas.length - 1 ? 'block' : 'none';
@@ -155,19 +255,28 @@ function renderQuestion() {
 
 // Navegar entre perguntas
 function navigateQuestion(direction) {
-    if (direction === 'prev' && currentQuestionIndex > 0) currentQuestionIndex--;
-    else if (direction === 'next' && currentQuestionIndex < currentQuiz.perguntas.length - 1) currentQuestionIndex++;
+    if (direction === 'prev' && currentQuestionIndex > 0) {
+        currentQuestionIndex--;
+    } else if (direction === 'next' && currentQuestionIndex < currentQuiz.perguntas.length - 1) {
+        currentQuestionIndex++;
+    }
+    
     renderQuestion();
 }
 
 // Submeter questionário
 function submitQuiz() {
+    // Calcular pontuação
     let score = 0;
     currentQuiz.perguntas.forEach(pergunta => {
-        if (userAnswers[pergunta.id] === pergunta.respostaCorreta) score++;
+        if (userAnswers[pergunta.id] === pergunta.respostaCorreta) {
+            score++;
+        }
     });
     
     const percentage = Math.round((score / currentQuiz.perguntas.length) * 100);
+    
+    // Exibir resultados
     quizContent.innerHTML = `
         <div class="results">
             <h3 class="results-title">Resultado do Questionário</h3>
@@ -178,10 +287,12 @@ function submitQuiz() {
         </div>
     `;
     
+    // Ocultar botões de navegação
     prevBtn.style.display = 'none';
     nextBtn.style.display = 'none';
     submitBtn.style.display = 'none';
     
+    // Adicionar evento ao botão de refazer
     document.getElementById('restart-btn').addEventListener('click', () => {
         currentQuestionIndex = 0;
         userAnswers = {};
@@ -198,8 +309,11 @@ function closeQuizModal() {
 // Event Listeners
 filtersContainer.addEventListener('click', (e) => {
     if (e.target.classList.contains('filter-btn')) {
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
         e.target.classList.add('active');
+        
         currentFilter = e.target.dataset.filter;
         renderCatalog();
     }
@@ -218,5 +332,5 @@ quizContainer.addEventListener('click', (e) => {
     if (e.target === quizContainer) closeQuizModal();
 });
 
-// Inicializar
-renderCatalog();
+// Inicializar carregando dados remotos
+loadExternalData();
