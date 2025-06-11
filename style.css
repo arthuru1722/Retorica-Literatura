@@ -508,6 +508,10 @@ nav {
     font-weight: 500;
 }
 .demo-warning {
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
     z-index: 99;
     background-color: #ffcc00;
     color: #333;
@@ -516,6 +520,26 @@ nav {
     font-weight: bold;
     font-size: 0.9rem;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.warning-demo {
+    display: inline-block;
+    padding-left: 100%; /* empurra o texto pra direita antes de começar */
+    animation: passar 20s linear infinite;
+    animation-play-state: paused;
+}
+
+.demo-warning:hover .warning-demo {
+  animation-play-state: running; /* opcional: anima só quando passa o mouse */
+}
+
+@keyframes passar {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 /* Ajuste para compensar a altura do aviso */

@@ -10,6 +10,8 @@ const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const submitBtn = document.getElementById('submit-btn');
 const closeQuiz = document.getElementById('close-quiz');
+const letreiro = document.querySelector('.warning-demo');
+const wrapper = document.querySelector('.demo-warning');
 
 // Estado da aplicação
 let currentFilter = 'all';
@@ -40,8 +42,8 @@ async function loadExternalData() {
 
         // Carregar ambos simultaneamente
         const [livrosResponse, quizzesResponse] = await Promise.all([
-            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/livros.js'),
-            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/quizzes.js')
+            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/livros.js?z='),
+            fetch('https://raw.githubusercontent.com/arthuru1722/reto-lib/main/quizzes.js?z=')
         ]);
 
         if (!livrosResponse.ok) throw new Error('Falha ao carregar livros');
@@ -331,6 +333,10 @@ closeQuiz.addEventListener('click', closeQuizModal);
 quizContainer.addEventListener('click', (e) => {
     if (e.target === quizContainer) closeQuizModal();
 });
+
+if (letreiro.scrollWidth > wrapper.clientWidth) {
+  letreiro.style.animationPlayState = 'running';
+}
 
 // Inicializar carregando dados remotos
 loadExternalData();
